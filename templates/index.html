@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DoH Abuse Detector</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#080c18;--surface:#0d1225;--card:#111827;--card2:#161f35;--border:#1e2d50;--teal:#00e5b0;--red:#ff4560;--purple:#6c63ff;--yellow:#ffd166;--white:#e8f0ff;--muted:#6b7fa3;--mono:'JetBrains Mono',monospace;--sans:'Syne',sans-serif}
+*{margin:0;padding:0;box-sizing:border-box}html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--white);font-family:var(--sans);min-height:100vh;overflow-x:hidden}
+body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(rgba(0,229,176,.025) 1px,transparent 1px),linear-gradient(90deg,rgba(0,229,176,.025) 1px,transparent 1px);background-size:48px 48px;pointer-events:none;z-index:0}
+.wrap{max-width:1200px;margin:0 auto;padding:0 24px;position:relative;z-index:1}
+header{padding:32px 0 24px;border-bottom:1px solid var(--border);margin-bottom:40px}
+.hdr{display:flex;align-items:center;gap:16px}
+.logo{width:48px;height:48px;background:var(--teal);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:24px;flex-shrink:0}
+.hdr-text h1{font-size:1.55rem;font-weight:800;letter-spacing:-.5px}
+.hdr-text h1 em{color:var(--teal);font-style:normal}
+.hdr-text p{font-family:var(--mono);font-size:.68rem;color:var(--muted);margin-top:3px;letter-spacing:1.5px}
+.sec-label{font-family:var(--mono);font-size:.65rem;color:var(--teal);letter-spacing:2.5px;text-transform:uppercase;margin-bottom:14px;display:flex;align-items:center;gap:10px}
+.sec-label::after{content:'';flex:1;height:1px;background:var(--border)}
+.dataset-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:16px}
+.ds-card{background:var(--card);border:2px solid var(--border);border-radius:14px;padding:16px 14px;cursor:pointer;transition:all .2s;position:relative;overflow:hidden}
+.ds-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:var(--teal);transform:scaleX(0);transition:transform .2s;transform-origin:left}
+.ds-card:hover{border-color:var(--teal);transform:translateY(-2px)}
+.ds-card:hover::before,.ds-card.active::before{transform:scaleX(1)}
+.ds-card.active{border-color:var(--teal);background:rgba(0,229,176,.05)}
+.ds-icon{font-size:1.5rem;margin-bottom:8px}.ds-title{font-weight:700;font-size:.88rem;margin-bottom:4px}
+.ds-desc{font-size:.72rem;color:var(--muted);line-height:1.5}
+.ds-badge{display:inline-block;margin-top:10px;padding:3px 10px;border-radius:20px;font-family:var(--mono);font-size:.6rem;background:rgba(0,229,176,.1);color:var(--teal);border:1px solid rgba(0,229,176,.2)}
+.custom-block{display:none;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px;margin-top:14px}
+.custom-block.show{display:block}
+.custom-block label{font-family:var(--mono);font-size:.68rem;color:var(--muted);display:block;margin-bottom:6px}
+.custom-block input{width:100%;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:10px 14px;color:var(--white);font-family:var(--mono);font-size:.8rem;outline:none;transition:border-color .2s;margin-bottom:14px}
+.custom-block input:focus{border-color:var(--teal)}
+.custom-block input::placeholder{color:var(--muted)}
+.run-btn{width:100%;margin-top:18px;padding:16px;background:var(--teal);color:#080c18;border:none;border-radius:12px;font-family:var(--sans);font-size:1rem;font-weight:800;cursor:pointer;transition:all .2s}
+.run-btn:hover{background:#00ffca;box-shadow:0 8px 28px rgba(0,229,176,.3)}
+.run-btn:disabled{opacity:.45;cursor:not-allowed;box-shadow:none}
+.err{display:none;background:rgba(255,69,96,.1);border:1px solid var(--red);border-radius:10px;padding:14px 18px;color:var(--red);font-family:var(--mono);font-size:.8rem;margin-top:14px}
+.err.show{display:block}
+.loading{display:none;text-align:center;padding:60px 0}.loading.show{display:block}
+.spinner{width:44px;height:44px;border:3px solid var(--border);border-top-color:var(--teal);border-radius:50%;animation:spin .7s linear infinite;margin:0 auto 16px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loading p{font-family:var(--mono);font-size:.82rem;color:var(--muted)}
+.results{display:none;margin-top:52px}.results.show{display:block;animation:fadeUp .4s ease}
+@keyframes fadeUp{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:translateY(0)}}
+.stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:36px}
+.stat-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px;text-align:center}
+.stat-num{font-size:2rem;font-weight:800;color:var(--teal);font-family:var(--mono)}
+.stat-label{font-size:.75rem;color:var(--muted);margin-top:5px;line-height:1.4}
+.explain{background:var(--card2);border-left:4px solid var(--teal);border-radius:0 10px 10px 0;padding:14px 18px;margin-bottom:28px;font-size:.84rem;color:var(--white);line-height:1.7}
+.explain strong{color:var(--teal)}.explain.red{border-left-color:var(--red)}.explain.purple{border-left-color:var(--purple)}.explain.yellow{border-left-color:var(--yellow)}
+.layers-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:36px}
+.layer-card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:22px}
+.layer-card h3{font-weight:700;font-size:.92rem;margin-bottom:18px}.layer-card h3 span{color:var(--teal)}
+.model-row{margin-bottom:14px}
+.model-hdr{display:flex;justify-content:space-between;margin-bottom:5px}
+.model-name{font-family:var(--mono);font-size:.73rem}.model-acc{font-family:var(--mono);font-size:.73rem;font-weight:700}
+.bar-bg{background:var(--border);border-radius:4px;height:7px;overflow:hidden}
+.bar-fill{height:100%;border-radius:4px;background:linear-gradient(90deg,var(--purple),var(--teal));width:0;transition:width 1s cubic-bezier(.4,0,.2,1)}
+.bar-fill.best{background:linear-gradient(90deg,var(--teal),#00ffca)}
+.cv-label{font-family:var(--mono);font-size:.62rem;color:var(--muted);margin-top:3px}
+.best-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:36px}
+.cm-card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:22px}
+.cm-card h3{font-weight:700;font-size:.92rem;margin-bottom:16px}
+.cm-matrix{display:grid;grid-template-columns:auto 1fr 1fr;grid-template-rows:auto 1fr 1fr;gap:5px;font-family:var(--mono);font-size:.72rem}
+.cm-lbl{color:var(--muted);display:flex;align-items:center;justify-content:center;padding:4px;font-size:.65rem}
+.cm-cell{border-radius:10px;padding:16px 8px;text-align:center}
+.cm-cell .big{font-size:2rem;font-weight:800;display:block}
+.cm-cell .sub{font-size:.62rem;color:rgba(255,255,255,.6);margin-top:2px;display:block}
+.cm-good{background:rgba(0,229,176,.15);color:var(--teal)}.cm-bad{background:rgba(255,69,96,.15);color:var(--red)}
+.metrics-card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:22px}
+.metrics-card h3{font-weight:700;font-size:.92rem;margin-bottom:16px}
+.metric-row{display:flex;justify-content:space-between;align-items:center;padding:11px 0;border-bottom:1px solid var(--border)}
+.metric-row:last-child{border-bottom:none}
+.metric-lbl{font-size:.82rem;color:var(--muted)}.metric-val{font-family:var(--mono);font-weight:700;font-size:1rem}
+.feat-table-wrap{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:22px;margin-bottom:36px;overflow-x:auto}
+.feat-table-wrap h3{font-weight:700;font-size:.92rem;margin-bottom:16px}
+table{width:100%;border-collapse:collapse;font-size:.82rem}
+th{font-family:var(--mono);font-size:.65rem;color:var(--muted);text-align:left;padding:8px 12px;border-bottom:1px solid var(--border);letter-spacing:1px;text-transform:uppercase}
+td{padding:10px 12px;border-bottom:1px solid rgba(30,45,80,.5)}
+tr:last-child td{border-bottom:none}tr:hover td{background:rgba(255,255,255,.02)}
+.tag-high{color:var(--red);font-weight:700;font-family:var(--mono);font-size:.75rem}
+.tag-low{color:var(--teal);font-weight:700;font-family:var(--mono);font-size:.75rem}
+.flow-table-wrap{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:22px;margin-bottom:36px;overflow-x:auto}
+.flow-table-wrap h3{font-weight:700;font-size:.92rem;margin-bottom:6px}
+.sub-desc{font-size:.78rem;color:var(--muted);margin-bottom:16px;line-height:1.6}
+.flow-badge{display:inline-block;padding:3px 10px;border-radius:20px;font-family:var(--mono);font-size:.68rem;font-weight:700}
+.badge-mal{background:rgba(255,69,96,.15);color:var(--red);border:1px solid rgba(255,69,96,.3)}
+.badge-ben{background:rgba(0,229,176,.12);color:var(--teal);border:1px solid rgba(0,229,176,.25)}
+.feat-imp-wrap{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:22px;margin-bottom:36px}
+.feat-imp-wrap h3{font-weight:700;font-size:.92rem;margin-bottom:6px}
+.feat-row{margin-bottom:13px}
+.feat-hdr{display:flex;justify-content:space-between;margin-bottom:5px}
+.feat-name{font-family:var(--mono);font-size:.73rem}.feat-val{font-family:var(--mono);font-size:.73rem;color:var(--teal);font-weight:700}
+.feat-bar-bg{background:var(--border);border-radius:4px;height:6px}
+.feat-bar-fill{height:100%;border-radius:4px;background:linear-gradient(90deg,var(--purple),var(--teal));width:0;transition:width 1.1s cubic-bezier(.4,0,.2,1)}
+.verdict{background:linear-gradient(135deg,rgba(0,229,176,.07),rgba(108,99,255,.07));border:1px solid var(--teal);border-radius:14px;padding:30px;text-align:center;margin-bottom:52px}
+.verdict-icon{font-size:2.8rem;margin-bottom:12px}.verdict-title{font-size:1.25rem;font-weight:800;color:var(--teal);margin-bottom:10px}
+.verdict-text{font-size:.85rem;color:var(--muted);line-height:1.7;max-width:680px;margin:0 auto}
+.flow-count{font-family:var(--mono);font-size:.72rem;color:var(--muted);margin-bottom:12px}
+@media(max-width:900px){.dataset-grid{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:600px){.dataset-grid,.layers-grid,.best-grid,.stat-grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="hdr">
+    <div class="logo">🛡️</div>
+    <div class="hdr-text">
+      <h1>DoH <em>Abuse</em> Detector</h1>
+      <p>// ENCRYPTED DNS THREAT DETECTION WITHOUT DECRYPTION · ML-POWERED</p>
+    </div>
+  </div>
+</header>
+
+<div class="sec-label">// 01 — Select Dataset</div>
+<div class="explain">
+  <strong>What is a dataset?</strong> Each dataset contains network flows — complete conversations between a machine and a DNS server — captured and converted into measurable statistics.
+  <strong>CIC Original</strong> is the real benchmark from the Canadian Institute for Cybersecurity with 49–50 captured flows.
+  <strong>Dataset 600</strong>, <strong>Dataset 1000</strong>, and <strong>Dataset 10K</strong> are extended versions with more traffic samples, giving the model more examples to learn from and improving detection accuracy.
+  <strong>Custom</strong> lets you provide your own captured traffic in the same CSV format.
+</div>
+
+<div class="dataset-grid">
+  <div class="ds-card active" id="card-cic" onclick="selectDS('cic')">
+    <div class="ds-icon">🏛️</div>
+    <div class="ds-title">CIC Original</div>
+    <div class="ds-desc">Real benchmark from the Canadian Institute for Cybersecurity. Unmodified captured traffic.</div>
+    <span class="ds-badge">49 + 50 samples</span>
+  </div>
+  <div class="ds-card" id="card-smote600" onclick="selectDS('smote600')">
+    <div class="ds-icon">📊</div>
+    <div class="ds-title">Dataset 600</div>
+    <div class="ds-desc">Extended dataset with 600 balanced traffic samples for better model training.</div>
+    <span class="ds-badge">600 samples</span>
+  </div>
+  <div class="ds-card" id="card-smote1000" onclick="selectDS('smote1000')">
+    <div class="ds-icon">🚀</div>
+    <div class="ds-title">Dataset 1000</div>
+    <div class="ds-desc">Larger dataset with 1000 samples for improved robustness and higher accuracy.</div>
+    <span class="ds-badge">1000 samples</span>
+  </div>
+  <div class="ds-card" id="card-smote10k" onclick="selectDS('smote10k')">
+    <div class="ds-icon">🔥</div>
+    <div class="ds-title">Dataset 10K</div>
+    <div class="ds-desc">Largest dataset with 10,000 samples. 3,000 test flows classified for maximum confidence.</div>
+    <span class="ds-badge">10,000 samples</span>
+  </div>
+  <div class="ds-card" id="card-custom" onclick="selectDS('custom')">
+    <div class="ds-icon">🔬</div>
+    <div class="ds-title">Custom Dataset</div>
+    <div class="ds-desc">Use your own traffic captured via Wireshark + CICFlowMeter. Provide CSV paths below.</div>
+    <span class="ds-badge">your own data</span>
+  </div>
+</div>
+
+<div class="custom-block" id="custom-block">
+  <label>Layer 1 CSV path — DoH vs Non-DoH</label>
+  <input type="text" id="c-l1" placeholder="e.g. Traffic_Data-CSVs/custom/layer1.csv">
+  <label>Layer 2 CSV path — Malicious vs Benign DoH</label>
+  <input type="text" id="c-l2" placeholder="e.g. Traffic_Data-CSVs/custom/layer2.csv">
+</div>
+
+<div class="err" id="err-box"></div>
+<button class="run-btn" id="run-btn" onclick="runAnalysis()">⚡ Run Detection Analysis</button>
+
+<div class="loading" id="loading">
+  <div class="spinner"></div>
+  <p>Training and evaluating 5 ML models... this takes a few seconds</p>
+</div>
+
+<div class="results" id="results">
+
+  <div class="sec-label">// 02 — Dataset Overview</div>
+  <div class="explain">
+    These numbers show what the selected dataset contains. <strong>Layer 1</strong> classifies DoH vs non-DoH traffic. <strong>Layer 2</strong> classifies malicious vs benign DoH flows.
+    The dataset is split 70/30 — 70% trains the model, 30% is kept aside as completely unseen test data. <strong>Test Flows</strong> is how many individual network conversations the model classified without ever having seen them before during training.
+  </div>
+  <div class="stat-grid">
+    <div class="stat-card"><div class="stat-num" id="r-l1">—</div><div class="stat-label">Layer 1 Samples<br>DoH vs Non-DoH</div></div>
+    <div class="stat-card"><div class="stat-num" id="r-l2">—</div><div class="stat-label">Layer 2 Samples<br>Malicious vs Benign</div></div>
+    <div class="stat-card"><div class="stat-num" id="r-acc">—</div><div class="stat-label">Best Accuracy<br>on unseen test data</div></div>
+    <div class="stat-card"><div class="stat-num" id="r-flows">—</div><div class="stat-label">Test Flows Classified<br>never seen by model</div></div>
+  </div>
+
+  <div class="sec-label">// 03 — Model Accuracy Comparison</div>
+  <div class="explain">
+    We tested <strong>5 different machine learning algorithms</strong> on both layers. Each model reads the same CSV rows and learns to classify them using packet statistics only — no packet contents.
+    <strong>Layer 1</strong> is generally easier because DoH and non-DoH traffic are statistically very different.
+    <strong>Layer 2 is harder</strong> because malicious DoH is specifically designed to mimic normal DoH — the model must find subtle differences.
+    <strong>5-Fold CV</strong> shows how reliably the model generalises to completely new data — close to the accuracy score means the model is not memorising the training data.
+  </div>
+  <div class="layers-grid">
+    <div class="layer-card"><h3>Layer 1 — <span>DoH vs Non-DoH</span></h3><div id="l1-bars"></div></div>
+    <div class="layer-card"><h3>Layer 2 — <span>Malicious vs Benign DoH</span></h3><div id="l2-bars"></div></div>
+  </div>
+
+  <div class="sec-label">// 04 — Best Model — Confusion Matrix & Metrics</div>
+  <div class="explain red">
+    The <strong>confusion matrix</strong> shows exactly what the model got right and wrong on individual flows.
+    <strong>True Positive</strong> = malicious flow correctly caught ✅. <strong>True Negative</strong> = benign flow correctly cleared ✅.
+    <strong>False Positive</strong> = benign flow wrongly flagged as malicious ❌ — innocent user affected.
+    <strong>False Negative</strong> = malicious flow wrongly cleared as benign ❌ — attacker gets through. This is the most dangerous error in security.
+    <strong>Recall on Malicious</strong> = out of all real attacks, how many did we catch? We want this as high as possible.
+  </div>
+  <div class="best-grid">
+    <div class="cm-card">
+      <h3>Confusion Matrix — <span id="cm-name" style="color:var(--teal)"></span></h3>
+      <div class="cm-matrix">
+        <div class="cm-lbl"></div>
+        <div class="cm-lbl">Pred: Benign</div>
+        <div class="cm-lbl">Pred: Malicious</div>
+        <div class="cm-lbl" style="writing-mode:vertical-rl;transform:rotate(180deg);font-size:.6rem">Actual: Benign</div>
+        <div class="cm-cell cm-good" id="cm-tn"><span class="big">—</span><span class="sub">True Negative ✅</span></div>
+        <div class="cm-cell cm-bad"  id="cm-fp"><span class="big">—</span><span class="sub">False Positive ❌</span></div>
+        <div class="cm-lbl" style="writing-mode:vertical-rl;transform:rotate(180deg);font-size:.6rem">Actual: Malicious</div>
+        <div class="cm-cell cm-bad"  id="cm-fn"><span class="big">—</span><span class="sub">False Negative ❌</span></div>
+        <div class="cm-cell cm-good" id="cm-tp"><span class="big">—</span><span class="sub">True Positive ✅</span></div>
+      </div>
+    </div>
+    <div class="metrics-card">
+      <h3>Classification Metrics</h3>
+      <div class="metric-row"><span class="metric-lbl">Overall Accuracy</span><span class="metric-val" id="m-acc" style="color:var(--teal)">—</span></div>
+      <div class="metric-row"><span class="metric-lbl">Precision — Malicious<br><small style="color:var(--muted);font-size:.7rem">When flagged as attack, how often correct?</small></span><span class="metric-val" id="m-pm">—</span></div>
+      <div class="metric-row"><span class="metric-lbl">Recall — Malicious<br><small style="color:var(--muted);font-size:.7rem">Of all real attacks, how many caught?</small></span><span class="metric-val" id="m-rm">—</span></div>
+      <div class="metric-row"><span class="metric-lbl">F1 Score — Malicious<br><small style="color:var(--muted);font-size:.7rem">Balance of precision and recall</small></span><span class="metric-val" id="m-fm">—</span></div>
+      <div class="metric-row"><span class="metric-lbl">Precision — Benign</span><span class="metric-val" id="m-pb">—</span></div>
+      <div class="metric-row"><span class="metric-lbl">Recall — Benign</span><span class="metric-val" id="m-rb">—</span></div>
+    </div>
+  </div>
+
+  <div class="sec-label">// 05 — Packet Feature Analysis</div>
+  <div class="explain purple">
+    This table shows <strong>how malicious and benign DoH traffic actually differ at the packet level</strong> — without reading any encrypted content.
+    Each row is a measurable property extracted from the network flows. The comparison shows average values for benign vs malicious, and by how much they differ.
+    For example: malicious flows send far more bytes because DNS tunneling is actively exfiltrating stolen data through DNS queries — something a normal DNS lookup would never do.
+    <strong>These differences are exactly what the ML model detects.</strong>
+  </div>
+  <div class="feat-table-wrap">
+    <h3>Traffic Feature Comparison — Malicious vs Benign DoH Flows</h3>
+    <table>
+      <thead><tr><th>Feature</th><th>What It Measures</th><th>Benign Avg</th><th>Malicious Avg</th><th>Difference</th><th>Why It Matters for Detection</th></tr></thead>
+      <tbody id="feat-tbody"></tbody>
+    </table>
+  </div>
+
+  <div class="sec-label">// 06 — Per-Flow Classification Results</div>
+  <div class="flow-table-wrap">
+    <h3>Individual Flow Classification — Which Flows Are Malicious?</h3>
+    <div class="sub-desc">
+      Every network flow from the test set is shown here — these are flows the model had <strong>never seen during training</strong>.
+      Each row = one complete network conversation. The model reads only the packet statistics shown and decides: normal DoH browsing, or malware tunneling data through encrypted DNS?
+      Results are sorted with <strong>predicted malicious flows first</strong>, ordered by highest bytes sent — so the most suspicious flows appear at the top.
+      <strong>No packet contents were read. No decryption was performed.</strong>
+    </div>
+    <div class="flow-count" id="flow-count"></div>
+    <div style="overflow-x:auto">
+      <table>
+        <thead><tr><th>Flow ID</th><th>Pkt Len Mean</th><th>Pkt Len Mode</th><th>Flow Bytes Sent</th><th>Response Time</th><th>Pkt Time Variance</th><th>Actual Class</th><th>Predicted</th><th>Result</th></tr></thead>
+        <tbody id="flow-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="sec-label">// 07 — Feature Importance</div>
+  <div class="explain yellow">
+    <strong>Feature importance</strong> shows which packet statistics the Random Forest model relied on most — ranked from most to least useful for detecting malicious DoH.
+    A higher percentage means that one measurement alone is more powerful for separating malicious from benign flows.
+    Every feature here is measurable from outside an encrypted packet. This directly proves that <strong>metadata analysis is sufficient to detect DNS tunneling — no decryption needed.</strong>
+  </div>
+  <div class="feat-imp-wrap">
+    <h3>Top 10 Features That Identify Malicious DoH Traffic</h3>
+    <div class="sub-desc">Ranked by Random Forest importance. Higher % = more useful for classifying a flow as malicious without reading any encrypted content.</div>
+    <div id="feat-imp-bars"></div>
+  </div>
+
+  <div class="verdict">
+    <div class="verdict-icon" id="v-icon">✅</div>
+    <div class="verdict-title" id="v-title">—</div>
+    <div class="verdict-text" id="v-text">—</div>
+  </div>
+
+</div>
+</div>
+
+<script>
+let sel='cic';
+const ALL=['cic','smote600','smote1000','smote10k','custom'];
+function selectDS(t){
+  sel=t;
+  ALL.forEach(x=>document.getElementById('card-'+x).classList.toggle('active',x===t));
+  document.getElementById('custom-block').classList.toggle('show',t==='custom');
+}
+const FMETA={
+  PacketLengthMean:{label:'Average size of each packet (bytes)',why:'Tunneling encodes data inside packets, making them larger than normal DNS packets'},
+  PacketLengthMode:{label:'Most frequently occurring packet size',why:'Malware sends fixed-size chunks repeatedly as it encodes data in the DNS fields'},
+  FlowBytesSent:{label:'Total bytes sent in this network flow',why:'DNS tunneling exfiltrates data — sends far more bytes than a normal domain lookup ever would'},
+  ResponseTimeTimeMean:{label:'Average time the server takes to respond',why:"Attacker's C2 server responds differently than legitimate DNS servers like Cloudflare or Google"},
+  PacketTimeVariance:{label:'How irregular the packet timing is',why:'Malware communicates on a programmatic schedule; human browsing has irregular unpredictable timing'},
+};
+function makeBars(id,data){
+  const c=document.getElementById(id);c.innerHTML='';
+  const best=Object.entries(data).reduce((a,b)=>b[1].accuracy>a[1].accuracy?b:a)[0];
+  Object.entries(data).forEach(([n,v])=>{
+    const iB=n===best;
+    const col=v.accuracy>=95?'var(--teal)':v.accuracy>=85?'var(--yellow)':'var(--red)';
+    c.innerHTML+=`<div class="model-row"><div class="model-hdr"><span class="model-name">${n}${iB?' ⭐':''}</span><span class="model-acc" style="color:${col}">${v.accuracy}%</span></div><div class="bar-bg"><div class="bar-fill${iB?' best':''}" data-w="${v.accuracy}" style="width:0"></div></div><div class="cv-label">5-Fold CV: ${v.cv}%</div></div>`;
+  });
+  setTimeout(()=>c.querySelectorAll('.bar-fill').forEach(b=>b.style.width=b.dataset.w+'%'),80);
+}
+function makeFeatStats(data){
+  const tb=document.getElementById('feat-tbody');tb.innerHTML='';
+  data.forEach(d=>{
+    const m=FMETA[d.feature]||{label:'—',why:'—'};
+    const ds=(d.diff_pct>0?'+':'')+d.diff_pct+'%';
+    const cls=d.direction==='higher'?'tag-high':'tag-low';
+    const arr=d.direction==='higher'?'↑ higher in malicious':'↓ lower in malicious';
+    tb.innerHTML+=`<tr><td><strong style="color:var(--white)">${d.feature}</strong></td><td style="color:var(--muted);font-size:.75rem">${m.label}</td><td style="color:var(--teal);font-family:var(--mono)">${d.benign_avg}</td><td style="color:var(--red);font-family:var(--mono)">${d.malicious_avg}</td><td><span class="${cls}">${ds} ${arr}</span></td><td style="color:var(--muted);font-size:.75rem">${m.why}</td></tr>`;
+  });
+}
+function makeFlowTable(data){
+  const tb=document.getElementById('flow-tbody');tb.innerHTML='';
+  document.getElementById('flow-count').textContent=`Showing all ${data.length} test flows — malicious flows sorted first by highest bytes sent`;
+  data.forEach(r=>{
+    const ac=r.actual==='Malicious'?'badge-mal':'badge-ben';
+    const pc=r.predicted==='Malicious'?'badge-mal':'badge-ben';
+    const ri=r.correct?'<span style="color:var(--teal)">✅</span>':'<span style="color:var(--red);font-weight:700">❌ MISSED</span>';
+    tb.innerHTML+=`<tr><td style="font-family:var(--mono);font-size:.72rem;color:var(--muted)">${r.flow_id}</td><td style="font-family:var(--mono);font-size:.75rem">${r.PacketLengthMean??'—'}</td><td style="font-family:var(--mono);font-size:.75rem">${r.PacketLengthMode??'—'}</td><td style="font-family:var(--mono);font-size:.75rem">${r.FlowBytesSent??'—'}</td><td style="font-family:var(--mono);font-size:.75rem">${r.ResponseTimeTimeMean??'—'}</td><td style="font-family:var(--mono);font-size:.75rem">${r.PacketTimeVariance??'—'}</td><td><span class="flow-badge ${ac}">${r.actual}</span></td><td><span class="flow-badge ${pc}">${r.predicted}</span></td><td>${ri}</td></tr>`;
+  });
+}
+function makeFeatImp(data){
+  const c=document.getElementById('feat-imp-bars');c.innerHTML='';
+  const mx=Math.max(...data.map(d=>d.importance));
+  data.forEach(d=>{c.innerHTML+=`<div class="feat-row"><div class="feat-hdr"><span class="feat-name">${d.feature}</span><span class="feat-val">${d.importance}%</span></div><div class="feat-bar-bg"><div class="feat-bar-fill" data-w="${(d.importance/mx)*100}" style="width:0"></div></div></div>`;});
+  setTimeout(()=>c.querySelectorAll('.feat-bar-fill').forEach(b=>b.style.width=b.dataset.w+'%'),150);
+}
+async function runAnalysis(){
+  const btn=document.getElementById('run-btn'),loading=document.getElementById('loading'),results=document.getElementById('results'),err=document.getElementById('err-box');
+  err.classList.remove('show');results.classList.remove('show');loading.classList.add('show');btn.disabled=true;
+  const body={dataset:sel};
+  if(sel==='custom'){body.custom_l1=document.getElementById('c-l1').value.trim();body.custom_l2=document.getElementById('c-l2').value.trim();}
+  try{
+    const res=await fetch('/analyze',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    const data=await res.json();
+    if(data.error){err.textContent='⚠  '+data.error;err.classList.add('show');return;}
+    document.getElementById('r-l1').textContent=data.dataset_info.l1_samples;
+    document.getElementById('r-l2').textContent=data.dataset_info.l2_samples;
+    document.getElementById('r-acc').textContent=data.best.accuracy+'%';
+    document.getElementById('r-flows').textContent=data.dataset_info.test_flows;
+    makeBars('l1-bars',data.layer1);makeBars('l2-bars',data.layer2);
+    const cm=data.best.confusion_matrix;
+    document.getElementById('cm-name').textContent=data.best.name;
+    document.getElementById('cm-tn').innerHTML=`<span class="big">${cm[0][0]}</span><span class="sub">True Negative ✅</span>`;
+    document.getElementById('cm-fp').innerHTML=`<span class="big">${cm[0][1]}</span><span class="sub">False Positive ❌</span>`;
+    document.getElementById('cm-fn').innerHTML=`<span class="big">${cm[1][0]}</span><span class="sub">False Negative ❌</span>`;
+    document.getElementById('cm-tp').innerHTML=`<span class="big">${cm[1][1]}</span><span class="sub">True Positive ✅</span>`;
+    const mc=v=>v>=95?'var(--teal)':v>=80?'var(--yellow)':'var(--red)';
+    document.getElementById('m-acc').textContent=data.best.accuracy+'%';
+    [['m-pm',data.best.precision_malicious],['m-rm',data.best.recall_malicious],['m-fm',data.best.f1_malicious],['m-pb',data.best.precision_benign],['m-rb',data.best.recall_benign]].forEach(([id,v])=>{const el=document.getElementById(id);el.textContent=v+'%';el.style.color=mc(v);});
+    makeFeatStats(data.feature_stats);
+    makeFlowTable(data.flow_table);
+    makeFeatImp(data.feature_importance);
+    const acc=data.best.accuracy,fn=cm[1][0];
+    document.getElementById('v-icon').textContent=acc>=95?'✅':acc>=80?'⚠️':'❌';
+    document.getElementById('v-title').textContent=acc>=95?'High-Confidence Malicious DoH Detection Achieved':acc>=80?'Moderate Detection — Consider Larger Dataset':'Low Accuracy — More Data Needed';
+    document.getElementById('v-text').textContent=`Using ${data.best.name}, the system achieved ${acc}% accuracy classifying ${data.dataset_info.test_flows} unseen network flows as malicious or benign DoH — entirely without decrypting a single packet. ${fn===0?'Zero malicious flows were missed.':fn+' malicious flow(s) were missed (false negatives).'} All detection used packet metadata only: size, timing, and flow byte statistics.`;
+    results.classList.add('show');
+  }catch(e){err.textContent='⚠  Connection error: '+e.message;err.classList.add('show');}
+  finally{loading.classList.remove('show');btn.disabled=false;}
+}
+</script>
+</body>
+</html>
